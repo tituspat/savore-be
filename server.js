@@ -32,12 +32,14 @@ app.get("/", (req, res) => {
 app.get("/menu", async (req, res) => {
     try {
         const result = await pool.query("SELECT * FROM menu");
+        console.log("Menu Data:", result.rows);
         res.json(result.rows);
     } catch (err) {
-        console.error(err.message);
+        console.error("Query Error:", err.message);
         res.status(500).send("Server Error");
     }
 });
+
 
 // Jalankan server
 app.listen(port, () => {
