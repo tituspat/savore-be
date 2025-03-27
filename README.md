@@ -51,7 +51,7 @@ This project is licensed under the ISC License.
 
 ### Authors
 
-- [Your Name](https://github.com/your-username)
+- Titus (https://github.com/tituspat)
 
 ### Acknowledgments
 
