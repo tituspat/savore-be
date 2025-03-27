@@ -1,17 +1,11 @@
-const { Pool } = require('pg');
+const dotenv = require('dotenv');
+const knex = require('knex');
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? {
-        rejectUnauthorized: false,
-    } : false
+dotenv.config();
+
+const db = knex({
+    client: 'pg',
+    connection: process.env.DATABASE_URL,
 });
 
-// Test koneksi database
-pool.connect()
-    .then(() => console.log("Connected to PostgreSQL"))
-    .catch(err => console.error("Database connection error", err));
-
-module.exports = {
-    query: (text, params) => pool.query(text, params),
-};
+module.exports = db;

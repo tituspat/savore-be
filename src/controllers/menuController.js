@@ -1,82 +1,86 @@
 const db = require('../config/db');
-const { menuQueries } = require('../models/queries');
 
 // Get all menu items
 exports.getAllMenuItems = async (req, res) => {
     try {
-        const result = await db.query(menuQueries.GET_ALL_MENU_ITEMS);
-        res.json(result.rows);
+        const result = await db('menus').select('*'); // ✅ Use correct table name
+        res.json(result);
     } catch (err) {
         console.error("Error getting menu items:", err.message);
         res.status(500).json({ error: "Server error" });
     }
 };
 
-// Get menu items by category
+// Get menu items by type
 exports.getMenuItemsByType = async (req, res) => {
-    const { category } = req.params;
+    const { menu_type } = req.params;
 
     try {
-        const result = await db.query(menuQueries.GET_MENU_ITEMS_BY_TYPE, [category]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: `No menu items found in category: ${category}` });
+        const allowedTypes = ["Meals", "Drinks", "Snacks"];
+        if (!allowedTypes.includes(menu_type)) {
+            return res.status(400).json({ message: `Menu type '${menu_type}' is not valid` });
         }
 
-        res.json(result.rows);
+        const result = await db('menus').where({ menu_type });
+
+        if (result.length === 0) {
+            return res.status(404).json({ message: `No menu items found for type: ${menu_type}` });
+        }
+
+        res.json(result);
     } catch (err) {
-        console.error(`Error getting ${category} items:`, err.message);
+        console.error(`Error getting ${menu_type} items:`, err.message);
         res.status(500).json({ error: "Server error" });
     }
 };
 
-// Get single menu item
+// Get single menu item by ID
 exports.getMenuItemById = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const result = await db.query(menuQueries.GET_MENU_ITEM_BY_ID, [id]);
+        const result = await db('menus').where({ id }).first();
 
-        if (result.rows.length === 0) {
+        if (!result) {
             return res.status(404).json({ message: `Menu item with ID ${id} not found` });
         }
 
-        res.json(result.rows[0]);
+        res.json(result);
     } catch (err) {
         console.error("Error getting menu item:", err.message);
         res.status(500).json({ error: "Server error" });
     }
 };
 
-// Create menu item
+// Create new menu item
 exports.createMenuItem = async (req, res) => {
-    const { name, description, price, category } = req.body;
+    console.log("Request headers:", req.headers);
+    console.log("Request body:", req.body); // 🐞 Debugging log
 
-    if (!name || !price || !category) {
-        return res.status(400).json({ message: `'${name}', '${price}', and '${category}' are required ` });
+    const { name, description, price, menu_type, status } = req.body;
+
+    if (!name || !price || !menu_type || !status) {
+        return res.status(400).json({ message: `Missing required fields, ${name}, ${price}, ${menu_type}, ${status}` });
     }
 
     try {
-        const allowedCategories = ["food", "beverage", "dessert"];
-        if (!allowedCategories.includes(category.toLowerCase())) {
-            return res.status(400).json({ message: `Category '${category}' is not valid` });
+        // Validate menu_type
+        const allowedTypes = ["Meals", "Drinks", "Snacks"];
+        if (!allowedTypes.includes(menu_type)) {
+            return res.status(400).json({ message: `Menu type '${menu_type}' is not valid` });
         }
 
-        const type = category.toLowerCase();
+        // Validate status
+        const allowedStatus = ["available", "unavailable"];
+        if (!allowedStatus.includes(status)) {
+            return res.status(400).json({ message: `Status '${status}' is not valid` });
+        }
 
-        // Insert new menu item
-        const result = await db.query(
-            menuQueries.CREATE_MENU_ITEM,
-            [name, description, price, type]
-        );
+        const newItem = await db('menus')
+            .insert({ name, description, price, menu_type, status })
+            .returning('*'); // ✅ Get inserted record
 
-        // Get complete item with category name
-        const newItem = await db.query(
-            menuQueries.GET_MENU_ITEM_BY_ID,
-            [result.rows[0].id]
-        );
-
-        res.status(201).json(newItem.rows[0]);
+        res.status(201).json(newItem[0]);
     } catch (err) {
         console.error("Error creating menu item:", err.message);
         res.status(500).json({ error: "Server error" });
@@ -86,39 +90,40 @@ exports.createMenuItem = async (req, res) => {
 // Update menu item
 exports.updateMenuItem = async (req, res) => {
     const { id } = req.params;
-    const { name, description, price, category } = req.body;
+    const { name, description, price, menu_type, status } = req.body;
 
     try {
         // Check if item exists
-        const checkItem = await db.query(menuQueries.CHECK_MENU_ITEM, [id]);
+        const checkItem = await db('menus').where({ id }).first();
 
-        if (checkItem.rows.length === 0) {
+        if (!checkItem) {
             return res.status(404).json({ message: `Menu item with ID ${id} not found` });
         }
 
-        let categoryId = checkItem.rows[0].type;
-
-        // If category is being updated, get the new category id
-        if (category) {
-            const categoryResult = category.toLowerCase();
-
-            if (categoryResult === 0) {
-                return res.status(400).json({ message: `Category '${category}' does not exist` });
+        // Validate menu_type if provided
+        if (menu_type) {
+            const allowedTypes = ["Meals", "Drinks", "Snacks"];
+            if (!allowedTypes.includes(menu_type)) {
+                return res.status(400).json({ message: `Menu type '${menu_type}' is not valid` });
             }
-
-            categoryId = categoryResult.rows[0].id;
         }
 
-        // Update the menu item
-        await db.query(
-            menuQueries.UPDATE_MENU_ITEM,
-            [name, description, price, categoryId, is_available, id]
-        );
+        // Validate status if provided
+        if (status) {
+            const allowedStatus = ["available", "unavailable"];
+            if (!allowedStatus.includes(status)) {
+                return res.status(400).json({ message: `Status '${status}' is not valid` });
+            }
+        }
+
+        // Update menu item
+        await db('menus')
+            .where({ id })
+            .update({ name, description, price, menu_type, status });
 
         // Get updated item
-        const result = await db.query(menuQueries.GET_MENU_ITEM_BY_ID, [id]);
-
-        res.json(result.rows[0]);
+        const updatedItem = await db('menus').where({ id }).first();
+        res.json(updatedItem);
     } catch (err) {
         console.error("Error updating menu item:", err.message);
         res.status(500).json({ error: "Server error" });
@@ -131,14 +136,14 @@ exports.deleteMenuItem = async (req, res) => {
 
     try {
         // Check if item exists
-        const checkItem = await db.query(menuQueries.CHECK_MENU_ITEM, [id]);
+        const checkItem = await db('menus').where({ id }).first();
 
-        if (checkItem.rows.length === 0) {
+        if (!checkItem) {
             return res.status(404).json({ message: `Menu item with ID ${id} not found` });
         }
 
         // Delete the item
-        await db.query(menuQueries.DELETE_MENU_ITEM, [id]);
+        await db('menus').where({ id }).del();
 
         res.json({ message: `Menu item with ID ${id} successfully deleted` });
     } catch (err) {
