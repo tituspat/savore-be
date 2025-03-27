@@ -1,6 +1,4 @@
-# **README.md**
-
-## **Savore Bistro Restaurant Backend API**
+# **Savore Bistro Restaurant Backend API**
 
 ### Overview
 
